@@ -16,7 +16,11 @@ from enum import IntEnum
 
 
 class PieceType(IntEnum):
-    """Board cell values: 0 is empty, 1..7 identify the locked piece type."""
+    """Board cell values: 0 is empty, 1..7 identify the locked piece type.
+
+    ``GARBAGE`` (8) marks cells that were not placed by the player but born
+    from a Game of Life generation.
+    """
 
     I = 1
     O = 2
@@ -25,6 +29,10 @@ class PieceType(IntEnum):
     Z = 5
     J = 6
     L = 7
+
+
+GARBAGE = 8
+"""Board cell value for blocks born from a Game of Life generation."""
 
 
 Cells = tuple[tuple[int, int], ...]

@@ -87,6 +87,51 @@ class CMLConfig:
             raise ValueError(f"coupling must be in [0, 1], got {self.coupling}")
 
 
+CouplingMode = Literal["none", "board_life"]
+"""How the engines interact.
+
+- ``none``: the engines run independently (Life is a free-running overlay).
+- ``board_life``: the Tetris stack *is* the Life grid; a generation is applied
+  to the visible board every ``locks_per_generation`` piece locks.
+"""
+
+
+SettleMode = Literal["none", "clusters", "columns"]
+"""What happens to blocks left floating after a board generation.
+
+- ``none``: they stay where they are (holes remain).
+- ``clusters``: each 4-connected group falls as a rigid body (sticky gravity).
+- ``columns``: each column's blocks fall straight down to close its gaps.
+"""
+
+
+@dataclass(frozen=True)
+class CouplingConfig:
+    mode: CouplingMode = "board_life"
+    locks_per_generation: int = 8
+    """A Life generation is applied to the board after every N piece locks."""
+    boundary: BoundaryMode = "fixed"
+    """Boundary used for the board generation (``fixed``: walls and floor are dead)."""
+    surface_depth: int | None = 1
+    """If set, only cells within this many rows of their column's top surface
+    evolve; deeper blocks are frozen (but still count as neighbours).
+    ``None`` evolves the whole visible board."""
+    settle: SettleMode = "clusters"
+    """How floating blocks fall after a generation (see ``SettleMode``).
+
+    Defaults (N=8, depth 1, clusters) were chosen from headless bot sweeps; see
+    ``coupling/board_life.py``. Lower N is harder.
+    """
+
+    def __post_init__(self) -> None:
+        if self.locks_per_generation < 1:
+            raise ValueError(
+                f"locks_per_generation must be >= 1, got {self.locks_per_generation}"
+            )
+        if self.surface_depth is not None and self.surface_depth < 1:
+            raise ValueError(f"surface_depth must be >= 1 or None, got {self.surface_depth}")
+
+
 @dataclass(frozen=True)
 class InputConfig:
     das: float = 0.17
@@ -111,6 +156,7 @@ class GameConfig:
     tetris: TetrisConfig = field(default_factory=TetrisConfig)
     life: LifeConfig = field(default_factory=LifeConfig)
     cml: CMLConfig = field(default_factory=CMLConfig)
+    coupling: CouplingConfig = field(default_factory=CouplingConfig)
     input: InputConfig = field(default_factory=InputConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
     sim_dt: float = 1.0 / 120.0

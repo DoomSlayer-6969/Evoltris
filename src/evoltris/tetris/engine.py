@@ -166,10 +166,7 @@ class TetrisEngine:
         self.active = None
 
         cleared = self.clear_full_rows()
-        if cleared:
-            n = len(cleared)
-            self.score += self.config.line_clear_scores[min(n, 4) - 1] * (self.level + 1)
-            self.lines += n
+        self._award_lines(len(cleared))
 
         event = LockEvent(piece.type, cells, cleared)
         self._events.append(event)
@@ -181,6 +178,28 @@ class TetrisEngine:
             return event
         self.spawn()
         return event
+
+    def replace_board(self, board: np.ndarray) -> tuple[int, ...]:
+        """Install a board evolved outside the engine (e.g. by a coupling).
+
+        Full rows are then cleared and scored like a normal line clear. If the
+        active piece no longer fits, the game is over (block out). Returns the
+        cleared row indices.
+        """
+        if board.shape != self.board.shape:
+            raise ValueError(f"shape mismatch: {board.shape} != {self.board.shape}")
+        self.board = np.asarray(board, dtype=np.uint8).copy()
+        cleared = self.clear_full_rows()
+        self._award_lines(len(cleared))
+        if self.active is not None and not self.fits(self.active):
+            self.active = None
+            self.game_over = True
+        return cleared
+
+    def _award_lines(self, n: int) -> None:
+        if n:
+            self.score += self.config.line_clear_scores[min(n, 4) - 1] * (self.level + 1)
+            self.lines += n
 
     def clear_full_rows(self) -> tuple[int, ...]:
         full = np.flatnonzero(self.board.all(axis=1))

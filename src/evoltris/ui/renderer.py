@@ -6,8 +6,9 @@ import numpy as np
 import pygame
 
 from evoltris.config import RenderConfig
+from evoltris.coupling.board_life import BoardLifeCoupling
 from evoltris.sim.world import World
-from evoltris.tetris.pieces import SHAPES, ActivePiece, PieceType
+from evoltris.tetris.pieces import GARBAGE, SHAPES, ActivePiece, PieceType
 from evoltris.ui.input import CONTROLS_HELP
 
 PIECE_COLOURS: dict[int, tuple[int, int, int]] = {
@@ -18,6 +19,7 @@ PIECE_COLOURS: dict[int, tuple[int, int, int]] = {
     PieceType.Z: (220, 60, 60),
     PieceType.J: (50, 90, 220),
     PieceType.L: (240, 140, 20),
+    GARBAGE: (105, 108, 122),
 }
 
 BG = (14, 15, 20)
@@ -25,6 +27,7 @@ GRID_LINE = (32, 34, 44)
 TEXT = (220, 222, 230)
 MUTED = (130, 134, 150)
 LIFE_COLOUR = (235, 235, 245)
+DEATH_MARK = (14, 15, 20)
 
 # CML heatmap ramp: value 0 → cool dark, 0.5 → teal, 1 → warm.
 _RAMP_STOPS = np.array([0.0, 0.5, 1.0])
@@ -97,6 +100,22 @@ class Renderer:
             center = (int(c) * cs + cs // 2, int(r) * cs + cs // 2)
             pygame.draw.circle(surf, LIFE_COLOUR, center, radius)
 
+    def _draw_life_preview(self, surf: pygame.Surface, world: World) -> None:
+        """Board-life mode: mark what the next generation will do to the stack."""
+        assert isinstance(world.coupling, BoardLifeCoupling)
+        cs = self.config.cell_size
+        board = world.tetris.board[self.hidden :]
+        nxt = world.coupling.preview(world.tetris, settle=False)[self.hidden :]
+        born = (board == 0) & (nxt != 0)
+        dies = (board != 0) & (nxt == 0)
+        for r, c in zip(*np.nonzero(born)):
+            rect = self._cell_rect(int(r) + self.hidden, int(c)).inflate(-cs // 3, -cs // 3)
+            pygame.draw.rect(surf, LIFE_COLOUR, rect, width=2, border_radius=2)
+        radius = max(2, cs // 6)
+        for r, c in zip(*np.nonzero(dies)):
+            center = (int(c) * cs + cs // 2, int(r) * cs + cs // 2)
+            pygame.draw.circle(surf, DEATH_MARK, center, radius)
+
     def _draw_board(self, surf: pygame.Surface, world: World) -> None:
         board = world.tetris.board
         rows, cols = np.nonzero(board)
@@ -134,9 +153,19 @@ class Renderer:
         y += 6
         life_state = "on" if self.show_life else "hidden"
         cml_state = "on" if self.show_cml else "hidden"
+        if isinstance(world.coupling, BoardLifeCoupling):
+            n = world.coupling.locks_until_generation
+            life_stats = (
+                f"Life gen {world.life.generation} ({life_state})",
+                f"  evolves in {n} lock{'s' if n != 1 else ''}",
+            )
+        else:
+            life_stats = (
+                f"Life gen {world.life.generation} ({life_state})",
+                f"  pop {world.life.population}",
+            )
         stats = (
-            f"Life gen {world.life.generation} ({life_state})",
-            f"  pop {world.life.population}",
+            *life_stats,
             f"CML step {world.cml.steps} ({cml_state})",
             f"  mean {world.cml.mean:.3f}",
             f"  r={world.config.cml.r} eps={world.config.cml.coupling}",
@@ -161,9 +190,12 @@ class Renderer:
         if self.show_cml:
             self._draw_cml(surf, world)
         self._draw_grid(surf)
-        if self.show_life:
+        board_life = isinstance(world.coupling, BoardLifeCoupling)
+        if self.show_life and not board_life:
             self._draw_life(surf, world)
         self._draw_board(surf, world)
+        if self.show_life and board_life and not world.tetris.game_over:
+            self._draw_life_preview(surf, world)
         self._draw_sidebar(surf, world)
         if world.tetris.game_over:
             self._draw_banner(surf, "GAME OVER  (R)")
