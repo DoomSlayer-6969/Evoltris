@@ -45,6 +45,11 @@ class LifeEngine:
             raise ValueError(f"shape mismatch: {grid.shape} != {self.grid.shape}")
         self.grid = (np.asarray(grid) != 0).astype(np.uint8)
 
+    def record_generation(self, grid: np.ndarray) -> None:
+        """Adopt a generation computed elsewhere (e.g. on the Tetris board) and count it."""
+        self.set_grid(grid)
+        self.generation += 1
+
     def step(self) -> None:
         self.grid = life_step(self.grid, self.config.boundary)
         self.generation += 1

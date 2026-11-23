@@ -1,4 +1,4 @@
-"""No-op coupling: the engines run independently. Default until a rule is designed."""
+"""No-op coupling: the engines run independently. Life runs as a free overlay."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 
 class NullCoupling:
+    drives_life = False
+
     def on_piece_locked(
         self, event: LockEvent, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine
     ) -> None:

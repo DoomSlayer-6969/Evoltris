@@ -1,14 +1,13 @@
 """Interface for interactions between Tetris, Game of Life and CML.
 
-OPEN DESIGN QUESTION: the rule linking the Game of Life generations, the CML
-environment and the Tetris board has not been decided yet. This protocol
-defines *where* such a rule plugs in, so that the engines themselves never
-reference one another. Until a rule is specified, ``NullCoupling`` is used.
+A coupling is the only place where the engines affect one another; the
+engines themselves never reference each other. Implementations:
 
-Possible candidates (none implemented; to be decided by the designer):
-- treat locked blocks as live cells and run a generation every N locks;
-- let GoL live cells act as obstacles on the Tetris board;
-- let CML values modulate GoL step frequency or Tetris gravity.
+- ``NullCoupling``: no interaction (Life is a free-running overlay).
+- ``BoardLifeCoupling``: the Tetris stack is the Life grid and evolves every
+  N piece locks.
+
+Still open: how CML values affect gameplay (``on_cml_step``).
 """
 
 from __future__ import annotations
@@ -22,6 +21,10 @@ if TYPE_CHECKING:
 
 
 class BoardCoupling(Protocol):
+    drives_life: bool
+    """True if the coupling sets the Life grid itself; the World then does not
+    seed or time-step the Life engine."""
+
     def on_piece_locked(
         self, event: LockEvent, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine
     ) -> None:
