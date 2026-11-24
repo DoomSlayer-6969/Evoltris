@@ -18,7 +18,7 @@ Controls: ←/→ move · ↓ soft drop · ↑/X rotate CW · Z rotate CCW · Sp
 | `cml/` | Coupled Map Lattice: continuous environmental grid in [0, 1] |
 | `coupling/` | `BoardCoupling` protocol linking the engines; `BoardLifeCoupling` (default) and `NullCoupling` |
 | `strategy/` | Game Theory interface (stub) |
-| `optimization/` | LPP difficulty-optimizer interface (stub) |
+| `optimization/` | LPP difficulty optimizer: `scipy` `linprog` backend and the adaptive controller |
 | `sim/world.py` | Owns the engines and steps each on its own fixed interval |
 | `ui/`, `app.py` | pygame-ce rendering/input and a fixed-timestep main loop |
 
@@ -53,7 +53,7 @@ The coupling defaults come from headless sweeps: a heuristic bot played 24 seede
 | Depth 1, cluster settling, N=5 | 24/24 · 0.26 | 1/24 · 0.33 |
 | Depth 1, cluster settling, N=12 | 15/24 · 0.33 | 0/24 · 0.36 |
 
-Without settling, dead blocks leave covered holes and the game is unplayable. Column settling makes Life a harmless eroder. With depth 1 and cluster settling, players who ignore the preview lose and players who plan around it survive. `locks_per_generation` is then a smooth difficulty knob (lower is harder), which makes it a natural LPP decision variable.
+Without settling, dead blocks leave covered holes and the game is unplayable. Column settling makes Life a harmless eroder. With depth 1 and cluster settling, players who ignore the preview lose and players who plan around it survive. `locks_per_generation` is then a smooth difficulty knob (lower is harder), which makes it a natural LPP decision variable (see *Adaptive difficulty*).
 
 **CML fertility mask.** `scripts/balance_sweep.py` reproduces this setup: `uv run python scripts/balance_sweep.py --games 24`. Its aware bot is weaker than the one behind the table above: at the default setting with the mask off, it loses 8/24 instead of 2/24. With that bot, the fertility mask at threshold 0.5 does not clearly change the balance:
 
@@ -61,10 +61,35 @@ Without settling, dead blocks leave covered holes and the game is unplayable. Co
 |---|---|---|
 | Fertility mask off | 20/24 · 0.31 | 8/24 · 0.34 |
 | Fertility mask on (0.5, default) | 20/24 · 0.33 | 12/24 · 0.34 |
+| Mask on + adaptive LPP, 50% limit (default) | 16/24 · 0.34 | 5/24 · 0.34 |
+
+## Adaptive difficulty (LPP)
+At every level-up (every 10 lines) a linear program re-tunes the two Life knobs: **N** = `locks_per_generation` ∈ [4, 12] (integer) and **t** = `fertility_threshold` ∈ [0.3, 0.7]. `scripts/fit_difficulty.py` fits two linear models from aware-bot sweeps over that grid (24 games per point, R² = 0.83 for both):
+
+    height(N, t) = 10.27 − 0.221·N − 1.813·t     mean stack height in rows (higher is harder)
+    loss(N, t)   = 0.955 − 0.054·N − 0.300·t     aware-bot loss rate
+
+The player's mean stack height over the finished level, h, moves the target H* ← H* + 0.5·(7 − h). A stack below 7 rows means the player is comfortable, so the target rises. Then the LP is solved:
+
+    minimise s   subject to   |height(N, t) − H*| ≤ s,   loss(N, t) ≤ 0.5,   bounds
+
+The absolute value is written as two linear inequalities. N is rounded by re-solving with N fixed to the floor and to the ceiling of its relaxed value. H* is clamped to the heights the fair region can reach, so it cannot wind up. The new t takes effect at the next fertility snapshot. All of this lives in `AdaptiveConfig`, which only works with the board-life coupling and a fertility threshold.
+
+**Choosing the fairness limit.** The easiest fair setting is always N = 12, t = 0.7. The limit only decides how hard the game can get for players who are doing well. With the optimizer on, the aware bot loses about 5–7/24 at every limit, because the adaptive target holds its stack near 7.5 rows. The limit mainly sets how costly it is to ignore Life, and how far the settings can swing from one level to the next (24 bot games per row; level 0 uses the coupling defaults):
+
+| Limit | N range used | Largest one-level jump in N | Naive losses | Aware losses |
+|---|---|---|---|---|
+| 15% | 12 | 0 | 9/24 | 5/24 |
+| 25% | 11–12 | 1 | 16/24 | 7/24 |
+| 35% | 9–12 | 3 | 13/24 | 6/24 |
+| **50% (default)** | 7–12 | 5 | 16/24 | 5/24 |
+| ≥ 65% (no limit) | 4–12 | 8 | 21/24 | 7/24 |
+
+50% gives the largest and most frequent swings a planning player still survives. Without a limit, the game is simply harder: the aware bot's stack rises to 8.1 rows.
 
 ## Open design questions
 These are intentionally left unimplemented until they are specified:
 1. ~~GoL ↔ Tetris coupling~~: resolved as `BoardLifeCoupling` (see above and *Balance* below).
 2. ~~CML → gameplay~~: resolved as the fertility mask (see *Mathematics*).
 3. **Game Theory.** Players, strategy sets, payoff function.
-4. **LPP.** Decision variables, objective, constraints. `DifficultyProblem` already has the standard-form shape for a solver.
+4. ~~LPP~~: resolved as the adaptive difficulty controller (see *Adaptive difficulty*).

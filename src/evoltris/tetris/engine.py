@@ -59,6 +59,13 @@ class TetrisEngine:
         return self.lines // self.config.lines_per_level
 
     @property
+    def stack_height(self) -> int:
+        """Rows from the floor up to the highest locked block in the visible field."""
+        visible = self.board[self.board_config.hidden_rows :]
+        rows = np.flatnonzero(visible.any(axis=1))
+        return 0 if rows.size == 0 else visible.shape[0] - int(rows[0])
+
+    @property
     def gravity_interval(self) -> float:
         c = self.config
         return max(c.min_gravity_interval, c.base_gravity_interval * c.gravity_decay**self.level)

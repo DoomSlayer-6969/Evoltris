@@ -14,7 +14,8 @@ uv run pytest                                       # all tests (headless, <1s)
 uv run pytest tests/test_coupling.py                # one file
 uv run pytest tests/test_coupling.py::test_name     # one test
 uv run pytest -k settle                             # by keyword
-uv run python scripts/balance_sweep.py --games 24   # headless bot balance sweep (~2 min)
+uv run python scripts/balance_sweep.py --games 24   # headless bot balance sweep (~1 min, parallel)
+uv run python scripts/fit_difficulty.py --games 24  # refit the LPP's linear models (~3 min)
 ```
 
 ## Architecture
@@ -24,6 +25,8 @@ uv run python scripts/balance_sweep.py --games 24   # headless bot balance sweep
 **Coupling selection.** `config.coupling.mode` picks the coupling through `make_coupling` in `sim/world.py`:
 - `board_life` (default) is `BoardLifeCoupling`. The Tetris board *is* the Life grid. Every `locks_per_generation` locks, `board_life_step` (a pure function) evolves the visible surface, settles floating clusters, then calls `TetrisEngine.replace_board`, which clears and scores full rows and checks for block-out. This coupling sets `drives_life = True`, so `World` never seeds or time-steps the Life engine. `LifeEngine.record_generation` only mirrors the board and counts generations. The CML gates which cells a generation may change (`fertility_threshold`). That mask is snapshotted by `on_start` and after each `evolve`, never read live, because the chaotic CML flips most cells every step.
 - `none` is `NullCoupling`. Life runs as a free random soup on its own timer.
+
+**Adaptive difficulty (LPP).** `World.dispatch_lock_events` records the stack height after every lock. When the level goes up, `World._retune` calls `AdaptiveDifficulty.retune` (`optimization/adaptive.py`), which solves an LP and swaps in a new `coupling.config` with the new N and t. The LP's linear models are hard-coded coefficients in `AdaptiveConfig`, fitted by `scripts/fit_difficulty.py`. Refit them after changing anything that affects Life's difficulty. Bot sweeps must run with `AdaptiveConfig(enabled=False)` so that they measure fixed settings.
 
 **Time model.** `app.py` runs a fixed-timestep loop (`sim_dt = 1/120`) with variable-rate rendering. `World.step` keeps a separate accumulator for Life and for CML, with `_EPS` tolerance for float drift. Pieces can lock in two places: from gravity inside `World.step`, or from player input (a hard drop) in `app.py`. The engine therefore queues `LockEvent`s, and `World.dispatch_lock_events()` is called from both places. Any new code path that can lock a piece must dispatch afterwards.
 
@@ -35,6 +38,5 @@ uv run python scripts/balance_sweep.py --games 24   # headless bot balance sweep
 
 These are intentionally stubs that raise `NotImplementedError`. Don't make up a model for them. Ask the user for the specification first.
 - **Game Theory** (`strategy/interface.py`). Players, strategies and payoffs are undefined. `World.observation()` already builds the `GameObservation` input.
-- **LPP difficulty optimizer** (`optimization/interface.py`). `DifficultyProblem` has the standard-form shape for `scipy.optimize.linprog`. `locks_per_generation` is the obvious decision variable; lower is harder.
 
 The coupling defaults (`locks_per_generation=8`, `surface_depth=1`, `settle="clusters"`) came from headless bot sweeps (`fertility_threshold=0.5` was checked with `scripts/balance_sweep.py`; see README *Balance*). Don't change these defaults without the user's agreement.

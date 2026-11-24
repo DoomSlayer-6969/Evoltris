@@ -168,6 +168,9 @@ class Renderer:
                 f"  evolves in {n} lock{'s' if n != 1 else ''}",
                 *(() if fertile is None else (f"  fertile {fertile[self.hidden :].mean():.0%}",)),
             )
+            if world.difficulty is not None:
+                c = world.coupling.config
+                life_stats += (f"  N={c.locks_per_generation} t={c.fertility_threshold:.2f}",)
         else:
             life_stats = (
                 f"Life gen {world.life.generation} ({life_state})",

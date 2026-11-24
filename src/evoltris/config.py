@@ -142,6 +142,54 @@ class CouplingConfig:
 
 
 @dataclass(frozen=True)
+class LinearModel:
+    """y = intercept + n * locks_per_generation + t * fertility_threshold."""
+
+    intercept: float
+    n: float
+    t: float
+
+    def __call__(self, n: float, t: float) -> float:
+        return self.intercept + self.n * n + self.t * t
+
+
+@dataclass(frozen=True)
+class AdaptiveConfig:
+    """LPP difficulty optimizer: re-tunes N and t at every level-up.
+
+    Only active with the ``board_life`` coupling and a fertility threshold.
+    See ``optimization/adaptive.py`` for the LP.
+    """
+
+    enabled: bool = True
+    n_bounds: tuple[int, int] = (4, 12)
+    """Range of ``locks_per_generation``."""
+    t_bounds: tuple[float, float] = (0.3, 0.7)
+    """Range of ``fertility_threshold``."""
+    max_aware_loss: float = 0.5
+    """Fairness constraint: predicted aware-bot loss rate must stay at or below this.
+
+    Tighter limits narrow the fair range (0.25 allows only N >= ~10); wider ones
+    allow bigger level-to-level swings and punish ignoring Life more. With 0.5
+    the optimizer uses N in 7..12 and the aware bot still loses ~5/24 games."""
+    comfort_height: float = 7.0
+    """Average stack height (rows) the controller steers the player towards."""
+    gain: float = 0.5
+    """Rows of target bot height per row the player's stack sat below comfort."""
+    height_model: LinearModel = LinearModel(intercept=10.2696, n=-0.2205, t=-1.8127)
+    """Aware-bot mean stack height. Fitted by ``scripts/fit_difficulty.py``
+    (24 games per point, N in 4..12, t in 0.3..0.7, R^2 = 0.83)."""
+    loss_model: LinearModel = LinearModel(intercept=0.9550, n=-0.0538, t=-0.3000)
+    """Aware-bot loss rate (500-piece cap). Same fit, R^2 = 0.83."""
+
+    def __post_init__(self) -> None:
+        if not self.n_bounds[0] <= self.n_bounds[1] or self.n_bounds[0] < 1:
+            raise ValueError(f"invalid n_bounds {self.n_bounds}")
+        if not 0.0 <= self.t_bounds[0] <= self.t_bounds[1] <= 1.0:
+            raise ValueError(f"invalid t_bounds {self.t_bounds}")
+
+
+@dataclass(frozen=True)
 class InputConfig:
     das: float = 0.17
     """Delayed auto shift: seconds a key is held before auto-repeat starts."""
@@ -166,6 +214,7 @@ class GameConfig:
     life: LifeConfig = field(default_factory=LifeConfig)
     cml: CMLConfig = field(default_factory=CMLConfig)
     coupling: CouplingConfig = field(default_factory=CouplingConfig)
+    adaptive: AdaptiveConfig = field(default_factory=AdaptiveConfig)
     input: InputConfig = field(default_factory=InputConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
     sim_dt: float = 1.0 / 120.0
