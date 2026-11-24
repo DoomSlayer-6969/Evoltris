@@ -6,6 +6,13 @@ Combining Conway's Game of Life with Tetris to create an adaptive, strategy-driv
 uv run evoltris      # play
 uv run pytest        # tests
 ```
+Without uv: `pip install -r requirements.txt && pip install -e . && evoltris`. `requirements.txt` is exported from `uv.lock` and pins every dependency group (game, tests, report).
+
+The technical report is [`docs/Evoltris_Report.pdf`](docs/Evoltris_Report.pdf). It explains how the game works and the mathematics behind it. To rebuild it (needs the Noto fonts in `/usr/share/fonts/noto`):
+```sh
+uv run --group report python docs/report/make_figures.py
+uv run --group report python docs/report/build_report.py
+```
 Controls: ←/→ move · ↓ soft drop · ↑/X rotate CW · Z rotate CCW · Space hard drop · G toggle next-generation preview · C toggle CML layer · P pause · R restart · Esc quit.
 
 ## Architecture (`src/evoltris/`)

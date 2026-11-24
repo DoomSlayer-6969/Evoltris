@@ -21,3 +21,8 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.2.0",
 ]
+report = [
+    "fonttools>=4.68.0",
+    "matplotlib>=3.11.2",
+    "reportlab>=5.1.0",
+]

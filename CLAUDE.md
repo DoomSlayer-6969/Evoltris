@@ -18,7 +18,11 @@ uv run python scripts/balance_sweep.py --table coupling   # headless bot balance
 uv run python scripts/balance_sweep.py --table fertility  #   numbers feed README *Balance*)
 uv run python scripts/fit_difficulty.py --games 24  # refit the LPP's linear models (~3 min)
 uv run python scripts/fit_strategy.py --games 48    # remeasure the Game Theory payoff matrix (~5 min)
+uv run --group report python docs/report/make_figures.py   # report figures -> docs/report/fig (gitignored)
+uv run --group report python docs/report/build_report.py   # -> docs/Evoltris_Report.pdf
 ```
+
+After changing dependencies, regenerate `requirements.txt` with the command in its header. The report's text hard-codes the measured numbers, so update `docs/report/build_report.py` and rebuild the PDF when balance results change.
 
 ## Architecture
 

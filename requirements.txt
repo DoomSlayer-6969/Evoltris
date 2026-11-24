@@ -1,0 +1,49 @@
+# Evoltris dependencies, exported from uv.lock (all groups: game, tests, report).
+# Regenerate with:
+#   uv export --format requirements-txt --no-hashes --no-emit-project --all-groups --no-header -o requirements.txt
+# Install with pip (Python >= 3.14):  pip install -r requirements.txt
+charset-normalizer==3.5.3
+    # via reportlab
+colorama==0.4.6 ; sys_platform == 'win32'
+    # via pytest
+contourpy==1.4.0
+    # via matplotlib
+cycler==0.12.1
+    # via matplotlib
+fonttools==4.68.0
+    # via matplotlib
+iniconfig==2.3.1
+    # via pytest
+kiwisolver==1.5.1
+    # via matplotlib
+matplotlib==3.11.2
+numpy==2.5.5
+    # via
+    #   contourpy
+    #   evoltris
+    #   matplotlib
+    #   scipy
+packaging==26.3
+    # via
+    #   matplotlib
+    #   pytest
+pillow==13.0.0
+    # via
+    #   matplotlib
+    #   reportlab
+pluggy==1.7.0
+    # via pytest
+pygame-ce==2.5.8
+    # via evoltris
+pygments==2.21.0
+    # via pytest
+pyparsing==3.3.3
+    # via matplotlib
+pytest==9.2.0
+python-dateutil==4.0.0
+    # via matplotlib
+reportlab==5.1.0
+scipy==1.18.1
+    # via evoltris
+tzdata==2026.6
+    # via python-dateutil
