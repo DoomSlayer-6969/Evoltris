@@ -190,6 +190,55 @@ class AdaptiveConfig:
 
 
 @dataclass(frozen=True)
+class DirectorStyle:
+    """A kind of Life the director can choose; the LPP then sets N for this t."""
+
+    name: str
+    fertility_threshold: float
+
+
+@dataclass(frozen=True)
+class StrategyConfig:
+    """Game Theory director: a zero-sum game between player and director.
+
+    Rows are player styles (bot policies), columns are director styles, entries
+    are the player's survival rate. At each level-up the director samples a
+    style from its mixed Nash equilibrium; see ``strategy/director.py``.
+    Requires the adaptive LPP (it picks t, the LPP then picks N).
+    """
+
+    enabled: bool = True
+    styles: tuple[DirectorStyle, ...] = (
+        DirectorStyle("rare & wide", 0.3),
+        DirectorStyle("balanced", 0.5),
+        DirectorStyle("frequent & narrow", 0.7),
+    )
+    player_styles: tuple[str, ...] = ("naive", "aware", "cautious", "well")
+    payoffs: tuple[tuple[float, ...], ...] = (
+        (0.250, 0.146, 0.146),
+        (0.792, 0.646, 0.604),
+        (0.000, 0.000, 0.042),
+        (0.146, 0.104, 0.062),
+    )
+    """Survival rate of each player style (row) against each director style
+    (column), each at the default settings' predicted difficulty. Measured by
+    ``scripts/fit_strategy.py`` (48 games per cell, so about +/-0.07 noise).
+    ``aware`` dominates, so the equilibrium is pure: the director always plays
+    "frequent & narrow" (game value 0.604)."""
+    seed: int | None = None
+    """Seed for the director's random style choice."""
+
+    def __post_init__(self) -> None:
+        if len(self.payoffs) != len(self.player_styles) or any(
+            len(row) != len(self.styles) for row in self.payoffs
+        ):
+            raise ValueError("payoffs must have one row per player style, one column per style")
+        for s in self.styles:
+            if not 0.0 <= s.fertility_threshold <= 1.0:
+                raise ValueError(f"style {s.name!r}: threshold must be in [0, 1]")
+
+
+@dataclass(frozen=True)
 class InputConfig:
     das: float = 0.17
     """Delayed auto shift: seconds a key is held before auto-repeat starts."""
@@ -215,6 +264,7 @@ class GameConfig:
     cml: CMLConfig = field(default_factory=CMLConfig)
     coupling: CouplingConfig = field(default_factory=CouplingConfig)
     adaptive: AdaptiveConfig = field(default_factory=AdaptiveConfig)
+    strategy: StrategyConfig = field(default_factory=StrategyConfig)
     input: InputConfig = field(default_factory=InputConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
     sim_dt: float = 1.0 / 120.0

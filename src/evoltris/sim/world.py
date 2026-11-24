@@ -15,6 +15,7 @@ from evoltris.coupling.interface import BoardCoupling
 from evoltris.coupling.null import NullCoupling
 from evoltris.life.engine import LifeEngine
 from evoltris.optimization.adaptive import AdaptiveDifficulty
+from evoltris.strategy.director import Director
 from evoltris.strategy.interface import GameObservation
 from evoltris.tetris.engine import TetrisEngine
 
@@ -54,6 +55,11 @@ class World:
         self.cml.randomize()
         self.coupling.on_start(self.tetris, self.life, self.cml)
         self.difficulty = make_difficulty(self.config, self.coupling)
+        self.director = (
+            Director(self.config.strategy)
+            if self.difficulty is not None and self.config.strategy.enabled
+            else None
+        )
         self._level = self.tetris.level
         self.paused = False
         self.time = 0.0
@@ -94,13 +100,14 @@ class World:
             self._level = self.tetris.level
 
     def _retune(self) -> None:
-        """Level-up: solve the difficulty LP and apply the new N and t.
+        """Level-up: the director picks a style of Life (t), the LPP sets N.
 
         A new threshold only takes effect at the next fertility snapshot, so the
         current mask (and the G preview) stays valid.
         """
         assert isinstance(self.coupling, BoardLifeCoupling) and self.difficulty is not None
-        n, t = self.difficulty.retune()
+        style = self.director.choose() if self.director is not None else None
+        n, t = self.difficulty.retune(style.fertility_threshold if style else None)
         self.coupling.config = dataclasses.replace(
             self.coupling.config, locks_per_generation=n, fertility_threshold=t
         )

@@ -1,14 +1,11 @@
 import dataclasses
 
 import numpy as np
-import pytest
 
 from evoltris.config import CMLConfig, CouplingConfig, GameConfig, LifeConfig, TetrisConfig
 from evoltris.coupling.board_life import BoardLifeCoupling
 from evoltris.coupling.null import NullCoupling
-from evoltris.optimization.interface import DifficultyProblem, UndefinedDifficultyOptimizer
 from evoltris.sim.world import World
-from evoltris.strategy.interface import UndefinedGameTheoryModel
 
 
 def make_world(**kw):
@@ -92,13 +89,6 @@ def test_observation_is_a_copy():
     obs.cml_state[:] = 0
     assert w.cml.state.any()
 
-
-def test_strategy_and_optimizer_stubs_refuse_to_run():
-    w = make_world()
-    with pytest.raises(NotImplementedError):
-        UndefinedGameTheoryModel().evaluate(w.observation())
-    with pytest.raises(NotImplementedError):
-        UndefinedDifficultyOptimizer().optimize(DifficultyProblem(variables=(), objective=()))
 
 
 def test_coupling_mode_selects_implementation():

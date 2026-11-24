@@ -171,6 +171,8 @@ class Renderer:
             if world.difficulty is not None:
                 c = world.coupling.config
                 life_stats += (f"  N={c.locks_per_generation} t={c.fertility_threshold:.2f}",)
+            if world.director is not None and world.director.style is not None:
+                life_stats += (f"  {world.director.style.name}",)
         else:
             life_stats = (
                 f"Life gen {world.life.generation} ({life_state})",

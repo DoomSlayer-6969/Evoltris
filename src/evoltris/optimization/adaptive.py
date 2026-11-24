@@ -27,6 +27,7 @@ predicts is easiest is used.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
 
@@ -74,6 +75,12 @@ def _corners(config: AdaptiveConfig) -> list[tuple[int, float]]:
 
 def _easiest(config: AdaptiveConfig) -> tuple[int, float]:
     return min(_corners(config), key=lambda nt: config.loss_model(*nt))
+
+
+def is_feasible(config: AdaptiveConfig) -> bool:
+    """Whether any setting within the bounds meets the loss limit (loss is linear,
+    so its minimum is at a corner)."""
+    return config.loss_model(*_easiest(config)) <= config.max_aware_loss + 1e-12
 
 
 def fair_height_range(
@@ -156,11 +163,21 @@ class AdaptiveDifficulty:
         """The player's mean stack height over the current level so far."""
         return sum(self._heights) / len(self._heights) if self._heights else None
 
-    def retune(self) -> tuple[int, float]:
-        """Update the target from the last level's play and solve for new settings."""
+    def retune(self, fertility_threshold: float | None = None) -> tuple[int, float]:
+        """Update the target from the last level's play and solve for new settings.
+
+        If ``fertility_threshold`` is given (the Game Theory director's choice),
+        t is fixed to it and only N is optimised. If no N in bounds meets the
+        loss limit at that t, the director's choice is overruled and t is free.
+        """
         h = self.player_height
         if h is not None:
             self.target = self._clamp(self.target + self.config.gain * (self.config.comfort_height - h))
         self._heights.clear()
-        self.settings = solve(self.config, self.target)
+        config = self.config
+        if fertility_threshold is not None:
+            fixed = dataclasses.replace(config, t_bounds=(fertility_threshold,) * 2)
+            if is_feasible(fixed):
+                config = fixed
+        self.settings = solve(config, self.target)
         return self.settings

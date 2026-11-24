@@ -1,12 +1,11 @@
-"""Linear Programming difficulty optimizer interface (stub).
+"""Linear Programming difficulty optimizer interface.
 
-OPEN DESIGN QUESTION: the decision variables, objective function and
-constraints have not been established from game requirements. This module
-only fixes the shape of the problem so that a solver (e.g.
-``scipy.optimize.linprog``) can be plugged in later. Optimization runs
-outside the real-time game loop, between rounds or levels.
+A ``DifficultyProblem`` is a solver-agnostic LP; a ``DifficultyOptimizer``
+solves it. ``LinprogOptimizer`` (``optimization/linprog.py``) is the
+implementation, and ``optimization/adaptive.py`` builds the problem solved at
+every level-up. Optimization runs only at level-ups, never every frame.
 
-Standard form expected of an implementation:
+Standard form:
 
     minimise / maximise   c^T x
     subject to            A_ub x <= b_ub,   A_eq x = b_eq,   l <= x <= u
@@ -43,12 +42,3 @@ class DifficultyConfig:
 
 class DifficultyOptimizer(Protocol):
     def optimize(self, problem: DifficultyProblem) -> DifficultyConfig: ...
-
-
-class UndefinedDifficultyOptimizer:
-    """Placeholder that refuses to run until the LP formulation is specified."""
-
-    def optimize(self, problem: DifficultyProblem) -> DifficultyConfig:
-        raise NotImplementedError(
-            "LPP formulation not yet specified: define variables, objective and constraints."
-        )

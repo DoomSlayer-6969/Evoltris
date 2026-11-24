@@ -40,7 +40,7 @@ def main():
                 coupling = dataclasses.replace(
                     CouplingConfig(), locks_per_generation=n, fertility_threshold=t
                 )
-                res = run_setting(coupling, True, args.games, args.pieces, pool=pool)
+                res = run_setting(coupling, "aware", args.games, args.pieces, pool=pool)
                 height = float(np.mean([r.mean_height for r in res]))
                 loss = sum(r.lost for r in res) / len(res)
                 lpp = sum(r.lines for r in res) / sum(r.pieces for r in res)
