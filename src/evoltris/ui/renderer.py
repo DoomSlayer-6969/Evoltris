@@ -28,6 +28,8 @@ TEXT = (220, 222, 230)
 MUTED = (130, 134, 150)
 LIFE_COLOUR = (235, 235, 245)
 DEATH_MARK = (14, 15, 20)
+FERTILE = (24, 70, 62)
+"""Background tint of cells the next board-life generation may change."""
 
 # CML heatmap ramp: value 0 → cool dark, 0.5 → teal, 1 → warm.
 _RAMP_STOPS = np.array([0.0, 0.5, 1.0])
@@ -80,8 +82,13 @@ class Renderer:
     # ----------------------------------------------------------------- layers
 
     def _draw_cml(self, surf: pygame.Surface, world: World) -> None:
-        visible = world.cml.state[self.hidden :]
-        rgb = cml_to_rgb(visible)  # (H, W, 3)
+        fertile = getattr(world.coupling, "fertile", None)
+        if fertile is not None:
+            # Board-life fertility: show the frozen mask the next generation uses,
+            # not the live CML, which flickers every step.
+            rgb = np.where(fertile[self.hidden :, :, None], FERTILE, BG).astype(np.uint8)
+        else:
+            rgb = cml_to_rgb(world.cml.state[self.hidden :])  # (H, W, 3)
         small = pygame.surfarray.make_surface(rgb.transpose(1, 0, 2))
         surf.blit(pygame.transform.scale(small, self.board_rect.size), (0, 0))
 
@@ -155,9 +162,11 @@ class Renderer:
         cml_state = "on" if self.show_cml else "hidden"
         if isinstance(world.coupling, BoardLifeCoupling):
             n = world.coupling.locks_until_generation
+            fertile = world.coupling.fertile
             life_stats = (
                 f"Life gen {world.life.generation} ({life_state})",
                 f"  evolves in {n} lock{'s' if n != 1 else ''}",
+                *(() if fertile is None else (f"  fertile {fertile[self.hidden :].mean():.0%}",)),
             )
         else:
             life_stats = (

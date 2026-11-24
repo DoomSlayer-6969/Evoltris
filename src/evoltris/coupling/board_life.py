@@ -13,6 +13,11 @@ active piece is never overwritten by a birth. With ``surface_depth = K`` only
 cells within K rows of their column's top surface (and the air above it) may
 change; deeper cells still count as neighbours but are frozen.
 
+The CML is a fertility mask: with ``fertility_threshold = t`` only cells
+whose CML value exceeded t may change. The CML is chaotic (r = 3.9 flips most
+of the mask every step), so the mask is snapshotted at game start and right
+after each generation, and stays fixed while the player plans the next one.
+
 Floating blocks can then settle: ``settle = "clusters"`` drops each
 4-connected group of blocks as a rigid body until it rests (sticky/cascade
 gravity); ``settle = "columns"`` drops every block straight down to close all
@@ -122,21 +127,27 @@ def board_life_step(
     protected: Iterable[tuple[int, int]] = (),
     surface_depth: int | None = None,
     settle: SettleMode = "none",
+    fertile: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return ``board`` after one Life generation on its visible rows.
 
     Pure function; ``board`` is not modified. ``protected`` cells (board
     coordinates, e.g. the active piece) never receive a birth. If
     ``surface_depth`` is set, only cells inside ``surface_mask`` may change.
+    If ``fertile`` (a bool array shaped like ``board``) is given, only cells
+    where it is True may change. Frozen cells still count as neighbours.
     ``settle`` then lets floating visible blocks fall (see module docstring).
     """
     out = board.copy()
     visible = board[hidden_rows:]
     alive = visible != 0
     nxt = life_step(alive.astype(np.uint8), boundary).astype(bool)
+    frozen = np.zeros_like(alive)
     if surface_depth is not None:
-        frozen = ~surface_mask(alive, surface_depth)
-        nxt[frozen] = alive[frozen]
+        frozen |= ~surface_mask(alive, surface_depth)
+    if fertile is not None:
+        frozen |= ~np.asarray(fertile, dtype=bool)[hidden_rows:]
+    nxt[frozen] = alive[frozen]
     born = nxt & ~alive
     for r, c in protected:
         if r >= hidden_rows:
@@ -159,10 +170,26 @@ class BoardLifeCoupling:
         self.config = config or CouplingConfig(mode="board_life")
         self.hidden_rows = hidden_rows
         self.locks_since_generation = 0
+        self.fertile: np.ndarray | None = None
+        """Bool mask (board shape) of cells the next generation may change, or
+        ``None`` for no fertility mask. Set by ``snapshot_fertility``."""
 
     @property
     def locks_until_generation(self) -> int:
         return self.config.locks_per_generation - self.locks_since_generation
+
+    def snapshot_fertility(self, cml: CMLEngine) -> None:
+        """Freeze the CML fertility mask for the next generation.
+
+        The CML is chaotic and changes almost every cell each step, so the mask
+        is taken once per generation, which keeps the preview exact while the
+        player plans.
+        """
+        t = self.config.fertility_threshold
+        if t is None or not cml.config.enabled:
+            self.fertile = None
+        else:
+            self.fertile = cml.state > t
 
     def _protected(self, tetris: TetrisEngine) -> tuple[tuple[int, int], ...]:
         return tuple(tetris.active.cells()) if tetris.active is not None else ()
@@ -181,13 +208,25 @@ class BoardLifeCoupling:
             self._protected(tetris),
             c.surface_depth,
             c.settle if settle else "none",
+            self.fertile,
         )
 
-    def evolve(self, tetris: TetrisEngine, life: LifeEngine) -> tuple[int, ...]:
-        """Apply one generation to the board now. Returns the rows it cleared."""
+    def evolve(
+        self, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine | None = None
+    ) -> tuple[int, ...]:
+        """Apply one generation to the board now. Returns the rows it cleared.
+
+        If ``cml`` is given, the fertility mask for the next generation is
+        snapshotted afterwards.
+        """
         cleared = tetris.replace_board(self.preview(tetris))
         life.record_generation(tetris.board)
+        if cml is not None:
+            self.snapshot_fertility(cml)
         return cleared
+
+    def on_start(self, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine) -> None:
+        self.snapshot_fertility(cml)
 
     def on_piece_locked(
         self, event: LockEvent, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine
@@ -197,7 +236,7 @@ class BoardLifeCoupling:
         self.locks_since_generation += 1
         if self.locks_since_generation >= self.config.locks_per_generation:
             self.locks_since_generation = 0
-            self.evolve(tetris, life)
+            self.evolve(tetris, life, cml)
 
     def on_life_step(self, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine) -> None:
         pass

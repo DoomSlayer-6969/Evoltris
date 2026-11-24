@@ -40,7 +40,7 @@ Only the **surface** evolves (`surface_depth`, default 1): cells within *K* rows
 
 With r ∈ [0, 4] and ε ∈ [0, 1], each update is a convex combination of values in [0, 1], so the state stays in [0, 1]. Defaults: r = 3.9 (chaotic regime), ε = 0.3, `reflective` (zero-flux) boundary. With `periodic` or `reflective` boundaries, coupling conserves Σ f(x).
 
-The two grids are separate: the CML is an environmental layer and never sets the alive/dead state.
+The CML never sets the alive/dead state directly. In `board_life` mode it acts as a **fertility mask** (`fertility_threshold`, default **0.5**): a generation may only change cells whose CML value is above the threshold. Frozen cells still count as neighbours. At r = 3.9 the CML flips about 75% of that mask on every step, so the mask is snapshotted at game start and right after each generation. It then stays fixed for the next `locks_per_generation` locks, which keeps the **G** preview exact. With the board-life coupling, **C** shows this frozen mask (tinted cells can change) instead of the live heatmap. `fertility_threshold = None` or disabling the CML turns the mask off.
 
 ## Balance
 The coupling defaults come from headless sweeps: a heuristic bot played 24 seeded games per setting, capped at 500 pieces. A *naive* bot ignores Life. An *aware* bot scores its placements on the board after the next generation. Without Life, the bot clears 0.39 lines per piece and survives.
@@ -55,9 +55,16 @@ The coupling defaults come from headless sweeps: a heuristic bot played 24 seede
 
 Without settling, dead blocks leave covered holes and the game is unplayable. Column settling makes Life a harmless eroder. With depth 1 and cluster settling, players who ignore the preview lose and players who plan around it survive. `locks_per_generation` is then a smooth difficulty knob (lower is harder), which makes it a natural LPP decision variable.
 
+**CML fertility mask.** `scripts/balance_sweep.py` reproduces this setup: `uv run python scripts/balance_sweep.py --games 24`. Its aware bot is weaker than the one behind the table above: at the default setting with the mask off, it loses 8/24 instead of 2/24. With that bot, the fertility mask at threshold 0.5 does not clearly change the balance:
+
+| Default coupling, N=8 | Naive: losses / lines per piece | Aware: losses / lines per piece |
+|---|---|---|
+| Fertility mask off | 20/24 · 0.31 | 8/24 · 0.34 |
+| Fertility mask on (0.5, default) | 20/24 · 0.33 | 12/24 · 0.34 |
+
 ## Open design questions
 These are intentionally left unimplemented until they are specified:
 1. ~~GoL ↔ Tetris coupling~~: resolved as `BoardLifeCoupling` (see above and *Balance* below).
-2. **CML → gameplay.** How environmental values affect difficulty or mechanics.
+2. ~~CML → gameplay~~: resolved as the fertility mask (see *Mathematics*).
 3. **Game Theory.** Players, strategy sets, payoff function.
 4. **LPP.** Decision variables, objective, constraints. `DifficultyProblem` already has the standard-form shape for a solver.

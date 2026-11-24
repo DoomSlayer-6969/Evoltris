@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from evoltris.config import BoardConfig, CouplingConfig, LifeConfig, TetrisConfig
+from evoltris.cml.engine import CMLEngine
+from evoltris.config import BoardConfig, CMLConfig, CouplingConfig, LifeConfig, TetrisConfig
 from evoltris.coupling.board_life import (
     BoardLifeCoupling,
     board_life_step,
@@ -293,3 +294,87 @@ def test_preview_without_settle_shows_raw_life_changes():
     assert settled[-3:, 4].tolist() == [GARBAGE, PieceType.I, GARBAGE]
     cp.evolve(tetris, life)
     np.testing.assert_array_equal(tetris.board, settled)
+
+
+# --------------------------------------------------------- CML fertility mask
+
+
+def blinker():
+    b = empty()
+    b[10, 3:6] = PieceType.I  # horizontal blinker: ends die, (9,4) and (11,4) are born
+    return b
+
+
+def test_fertility_mask_freezes_infertile_cells():
+    b = blinker()
+    fertile = np.ones((H, W), dtype=bool)
+    fertile[10, 3] = False  # this end survives instead of dying
+    fertile[9, 4] = False  # no birth here
+    out = board_life_step(b, HID, fertile=fertile)
+    assert out[10, 3] == PieceType.I and out[10, 5] == 0
+    assert out[9, 4] == 0 and out[11, 4] == GARBAGE
+
+
+def test_frozen_cells_still_count_as_neighbours():
+    b = blinker()
+    fertile = np.zeros((H, W), dtype=bool)
+    fertile[11, 4] = True  # only the birth below the centre may happen
+    out = board_life_step(b, HID, fertile=fertile)
+    expected = b.copy()
+    expected[11, 4] = GARBAGE
+    np.testing.assert_array_equal(out, expected)
+
+
+def test_all_fertile_matches_no_mask():
+    b = blinker()
+    np.testing.assert_array_equal(
+        board_life_step(b, HID, fertile=np.ones((H, W), dtype=bool)), board_life_step(b, HID)
+    )
+
+
+def test_fertility_threshold_must_be_in_unit_interval():
+    for bad in (-0.1, 1.1):
+        with pytest.raises(ValueError):
+            CouplingConfig(fertility_threshold=bad)
+    assert CouplingConfig(fertility_threshold=None).fertility_threshold is None
+
+
+def make_cml(enabled=True):
+    cml = CMLEngine((H, W), CMLConfig(seed=0, enabled=enabled))
+    cml.randomize()
+    return cml
+
+
+def test_mask_is_snapshotted_at_start_and_fixed_until_next_generation():
+    tetris, life, cp = make(n=2)
+    cml = make_cml()
+    cp.on_start(tetris, life, cml)
+    np.testing.assert_array_equal(cp.fertile, cml.state > 0.5)
+    first = cp.fertile.copy()
+    cml.step()
+    assert not np.array_equal(cml.state > 0.5, first)
+    cp.on_piece_locked(tetris.hard_drop(), tetris, life, cml)
+    np.testing.assert_array_equal(cp.fertile, first)  # not yet re-snapshotted
+    cml.step()
+    cp.on_piece_locked(tetris.hard_drop(), tetris, life, cml)  # generation happens
+    assert life.generation == 1
+    np.testing.assert_array_equal(cp.fertile, cml.state > 0.5)
+
+
+def test_preview_uses_the_fertility_mask():
+    tetris, life, cp = make()
+    tetris.board[:] = blinker()
+    cml = make_cml()
+    cml.set_state(np.zeros((H, W)))  # nothing is fertile
+    cp.on_start(tetris, life, cml)
+    np.testing.assert_array_equal(cp.preview(tetris), tetris.board)
+
+
+def test_no_mask_when_threshold_is_none_or_cml_disabled():
+    tetris, life, _ = make()
+    cp = BoardLifeCoupling(CouplingConfig(fertility_threshold=None), HID)
+    cp.on_start(tetris, life, make_cml())
+    assert cp.fertile is None
+    cp = BoardLifeCoupling(CouplingConfig(), HID)
+    cp.on_start(tetris, life, make_cml(enabled=False))
+    assert cp.fertile is None

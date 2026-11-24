@@ -39,6 +39,7 @@ class World:
         if not self.coupling.drives_life:
             self.life.randomize()
         self.cml.randomize()
+        self.coupling.on_start(self.tetris, self.life, self.cml)
         self.paused = False
         self.time = 0.0
         self._life_acc = 0.0

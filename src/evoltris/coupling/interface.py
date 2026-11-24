@@ -5,9 +5,8 @@ engines themselves never reference each other. Implementations:
 
 - ``NullCoupling``: no interaction (Life is a free-running overlay).
 - ``BoardLifeCoupling``: the Tetris stack is the Life grid and evolves every
-  N piece locks.
-
-Still open: how CML values affect gameplay (``on_cml_step``).
+  N piece locks, and the CML acts as a fertility mask: only cells whose CML
+  value is above a threshold may change in a generation.
 """
 
 from __future__ import annotations
@@ -24,6 +23,10 @@ class BoardCoupling(Protocol):
     drives_life: bool
     """True if the coupling sets the Life grid itself; the World then does not
     seed or time-step the Life engine."""
+
+    def on_start(self, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine) -> None:
+        """Called once by the World after all engines are initialised."""
+        ...
 
     def on_piece_locked(
         self, event: LockEvent, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine

@@ -14,6 +14,7 @@ uv run pytest                                       # all tests (headless, <1s)
 uv run pytest tests/test_coupling.py                # one file
 uv run pytest tests/test_coupling.py::test_name     # one test
 uv run pytest -k settle                             # by keyword
+uv run python scripts/balance_sweep.py --games 24   # headless bot balance sweep (~2 min)
 ```
 
 ## Architecture
@@ -21,7 +22,7 @@ uv run pytest -k settle                             # by keyword
 **The engines never reference each other.** `tetris/`, `life/` and `cml/` are independent, pure-numpy engines with no pygame imports. Every interaction between them goes through a `BoardCoupling` (`coupling/interface.py`). `World` (`sim/world.py`) calls its hooks: `on_piece_locked`, `on_life_step` and `on_cml_step`. New cross-engine mechanics belong in a coupling, not in an engine.
 
 **Coupling selection.** `config.coupling.mode` picks the coupling through `make_coupling` in `sim/world.py`:
-- `board_life` (default) is `BoardLifeCoupling`. The Tetris board *is* the Life grid. Every `locks_per_generation` locks, `board_life_step` (a pure function) evolves the visible surface, settles floating clusters, then calls `TetrisEngine.replace_board`, which clears and scores full rows and checks for block-out. This coupling sets `drives_life = True`, so `World` never seeds or time-steps the Life engine. `LifeEngine.record_generation` only mirrors the board and counts generations.
+- `board_life` (default) is `BoardLifeCoupling`. The Tetris board *is* the Life grid. Every `locks_per_generation` locks, `board_life_step` (a pure function) evolves the visible surface, settles floating clusters, then calls `TetrisEngine.replace_board`, which clears and scores full rows and checks for block-out. This coupling sets `drives_life = True`, so `World` never seeds or time-steps the Life engine. `LifeEngine.record_generation` only mirrors the board and counts generations. The CML gates which cells a generation may change (`fertility_threshold`). That mask is snapshotted by `on_start` and after each `evolve`, never read live, because the chaotic CML flips most cells every step.
 - `none` is `NullCoupling`. Life runs as a free random soup on its own timer.
 
 **Time model.** `app.py` runs a fixed-timestep loop (`sim_dt = 1/120`) with variable-rate rendering. `World.step` keeps a separate accumulator for Life and for CML, with `_EPS` tolerance for float drift. Pieces can lock in two places: from gravity inside `World.step`, or from player input (a hard drop) in `app.py`. The engine therefore queues `LockEvent`s, and `World.dispatch_lock_events()` is called from both places. Any new code path that can lock a piece must dispatch afterwards.
@@ -33,8 +34,7 @@ uv run pytest -k settle                             # by keyword
 ## Open design questions: do not invent
 
 These are intentionally stubs that raise `NotImplementedError`. Don't make up a model for them. Ask the user for the specification first.
-- **CML → gameplay.** The CML runs and renders but has no effect on play. Its hook is `on_cml_step`.
 - **Game Theory** (`strategy/interface.py`). Players, strategies and payoffs are undefined. `World.observation()` already builds the `GameObservation` input.
 - **LPP difficulty optimizer** (`optimization/interface.py`). `DifficultyProblem` has the standard-form shape for `scipy.optimize.linprog`. `locks_per_generation` is the obvious decision variable; lower is harder.
 
-The coupling defaults (`locks_per_generation=8`, `surface_depth=1`, `settle="clusters"`) came from headless bot sweeps. The bot script is not in the repo. Don't change these defaults without the user's agreement.
+The coupling defaults (`locks_per_generation=8`, `surface_depth=1`, `settle="clusters"`) came from headless bot sweeps (`fertility_threshold=0.5` was checked with `scripts/balance_sweep.py`; see README *Balance*). Don't change these defaults without the user's agreement.

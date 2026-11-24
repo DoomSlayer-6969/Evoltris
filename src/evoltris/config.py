@@ -122,8 +122,17 @@ class CouplingConfig:
     Defaults (N=8, depth 1, clusters) were chosen from headless bot sweeps; see
     ``coupling/board_life.py``. Lower N is harder.
     """
+    fertility_threshold: float | None = 0.5
+    """CML fertility mask. If set (and the CML is enabled), a generation may only
+    change cells whose CML value exceeded this threshold when the mask was last
+    snapshotted (at game start and right after each generation). ``None`` lets
+    every cell evolve."""
 
     def __post_init__(self) -> None:
+        if self.fertility_threshold is not None and not 0.0 <= self.fertility_threshold <= 1.0:
+            raise ValueError(
+                f"fertility_threshold must be in [0, 1] or None, got {self.fertility_threshold}"
+            )
         if self.locks_per_generation < 1:
             raise ValueError(
                 f"locks_per_generation must be >= 1, got {self.locks_per_generation}"

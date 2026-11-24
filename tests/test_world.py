@@ -63,6 +63,9 @@ class RecordingCoupling:
     def __init__(self):
         self.locks, self.life_steps, self.cml_steps = [], 0, 0
 
+    def on_start(self, tetris, life, cml):
+        pass
+
     def on_piece_locked(self, event, tetris, life, cml):
         self.locks.append(event)
 
@@ -120,3 +123,12 @@ def test_board_life_world_evolves_board_after_n_locks():
     w.dispatch_lock_events()
     assert w.life.generation == 1
     np.testing.assert_array_equal(w.life.grid, (w.tetris.board != 0).astype(np.uint8))
+
+
+def test_board_life_world_snapshots_fertility_mask_at_start():
+    w = make_world(coupling=CouplingConfig(mode="board_life"))
+    mask = w.coupling.fertile.copy()
+    np.testing.assert_array_equal(mask, w.cml.state > 0.5)
+    run(w, 1.0)  # CML steps, but no generation happens
+    assert w.cml.steps == 4
+    np.testing.assert_array_equal(w.coupling.fertile, mask)

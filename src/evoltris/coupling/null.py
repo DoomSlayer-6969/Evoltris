@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 class NullCoupling:
     drives_life = False
 
+    def on_start(self, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine) -> None:
+        pass
+
     def on_piece_locked(
         self, event: LockEvent, tetris: TetrisEngine, life: LifeEngine, cml: CMLEngine
     ) -> None:
